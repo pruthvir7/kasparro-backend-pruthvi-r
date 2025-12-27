@@ -145,31 +145,45 @@ async def get_stats(db: AsyncSession = Depends(get_db)):
     )
 
 @router.post("/etl/run")
-async def trigger_etl():
+async def trigger_etl(db: AsyncSession = Depends(get_db)):
     """
     Manually trigger all ETL pipelines
     """
     try:
-        from app.etl.run_all import run_all_etls
+        from app.etl.coinpaprika_etl import CoinPaprikaETL
+        from app.etl.coingecko_etl import CoinGeckoETL
+        from app.etl.csv_etl import CSVETL
         
-        # Run ETL
-        results = await run_all_etls()
+        etls = [
+            CoinPaprikaETL(db),
+            CoinGeckoETL(db),
+            CSVETL(db, "/app/data/sample_crypto.csv")
+        ]
+        
+        results = []
+        for etl in etls:
+            try:
+                count = await etl.run()
+                results.append({
+                    "source": etl.source_name,
+                    "records": count,
+                    "status": "success"
+                })
+            except Exception as e:
+                results.append({
+                    "source": etl.source_name,
+                    "records": 0,
+                    "status": "failed",
+                    "error": str(e)
+                })
         
         return {
             "status": "success",
             "message": "ETL pipelines completed",
-            "results": [
-                {
-                    "source": source,
-                    "records": count,
-                    "status": status
-                }
-                for source, count, status in results
-            ]
+            "results": results
         }
     except Exception as e:
         return {
             "status": "error",
             "message": str(e)
         }
-
