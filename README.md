@@ -3,6 +3,16 @@
 
 Production-grade ETL pipeline and REST API for cryptocurrency data aggregation from multiple sources.
 
+## 🌐 Live Deployment
+
+**Production URL:** https://your-render-url.onrender.com
+
+**Try the API:**
+- Interactive Docs: https://your-url.onrender.com/docs
+- Health Check: https://your-url.onrender.com/api/v1/health
+- Get Data: https://your-url.onrender.com/api/v1/data?limit=10
+- Statistics: https://your-url.onrender.com/api/v1/stats
+
 ## 🏗️ Architecture
 
 ```
