@@ -5,13 +5,13 @@ Production-grade ETL pipeline and REST API for cryptocurrency data aggregation f
 
 ## 🌐 Live Deployment
 
-**Production URL:** https://your-render-url.onrender.com
+**Production URL:** https://kasparro-api-fkxv.onrender.com
 
 **Try the API:**
-- Interactive Docs: https://your-url.onrender.com/docs
-- Health Check: https://your-url.onrender.com/api/v1/health
-- Get Data: https://your-url.onrender.com/api/v1/data?limit=10
-- Statistics: https://your-url.onrender.com/api/v1/stats
+- Interactive Docs: https://kasparro-api-fkxv.onrender.com/docs
+- Health Check: https://kasparro-api-fkxv.onrender.com/api/v1/health
+- Get Data: https://kasparro-api-fkxv.onrender.com/api/v1/data?limit=10
+- Statistics: https://kasparro-api-fkxv.onrender.com/api/v1/stats
 
 ## 🏗️ Architecture
 
