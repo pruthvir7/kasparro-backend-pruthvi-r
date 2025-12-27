@@ -143,3 +143,33 @@ async def get_stats(db: AsyncSession = Depends(get_db)):
         avg_duration_seconds=round(avg_duration, 2) if avg_duration else None,
         records_by_source=records_by_source
     )
+
+@router.post("/etl/run")
+async def trigger_etl():
+    """
+    Manually trigger all ETL pipelines
+    """
+    try:
+        from app.etl.run_all import run_all_etls
+        
+        # Run ETL
+        results = await run_all_etls()
+        
+        return {
+            "status": "success",
+            "message": "ETL pipelines completed",
+            "results": [
+                {
+                    "source": source,
+                    "records": count,
+                    "status": status
+                }
+                for source, count, status in results
+            ]
+        }
+    except Exception as e:
+        return {
+            "status": "error",
+            "message": str(e)
+        }
+
