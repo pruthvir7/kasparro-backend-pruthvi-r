@@ -12,11 +12,11 @@ COPY . .
 # Create data directory
 RUN mkdir -p /app/data
 
-# Create startup script
+# Create startup script (NO ETL on startup for Cloud Run)
 RUN echo '#!/bin/bash\n\
 set -e\n\
 echo "========================================"\n\
-echo "Kasparro Backend Startup"\n\
+echo "Kasparro Backend Startup (Cloud Run)"\n\
 echo "========================================"\n\
 echo ""\n\
 echo "Step 1: Creating database tables..."\n\
@@ -34,19 +34,19 @@ asyncio.run(init_db())\n\
 "\n\
 echo "✓ Database initialized"\n\
 echo ""\n\
-echo "Step 2: Running ETL pipelines..."\n\
-python -m app.etl.run_all\n\
-echo "✓ ETL complete"\n\
+echo "Note: ETL will run via Cloud Scheduler (cron)"\n\
 echo ""\n\
-echo "Step 3: Starting API server on port 8000"\n\
+echo "Step 2: Starting API server on port ${PORT:-8000}"\n\
 echo "========================================"\n\
-exec uvicorn app.main:app --host 0.0.0.0 --port 8000' > /app/entrypoint.sh
+exec uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}' > /app/entrypoint.sh
 
 RUN chmod +x /app/entrypoint.sh
 
+# Cloud Run uses PORT env variable
+ENV PORT=8000
 EXPOSE 8000
 
 HEALTHCHECK --interval=30s --timeout=10s --start-period=90s --retries=3 \
-  CMD python -c "import httpx; httpx.get('http://localhost:8000/api/v1/health', timeout=5)" || exit 1
+  CMD python -c "import httpx; httpx.get('http://localhost:${PORT:-8000}/api/v1/health', timeout=5)" || exit 1
 
 ENTRYPOINT ["/app/entrypoint.sh"]
