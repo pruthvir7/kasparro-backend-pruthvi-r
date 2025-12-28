@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Security
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, desc
 from app.core.database import get_db
@@ -14,14 +14,14 @@ from app.utils.metrics import (
     api_request_duration,
     crypto_records_total
 )
-import time
-
+from app.core.auth import verify_api_key  # ADD THIS IMPORT
 
 router = APIRouter()
 
+
 @router.get("/metrics")
 async def metrics():
-    """Prometheus metrics endpoint"""
+    """Prometheus metrics endpoint - No auth required for monitoring"""
     return Response(
         content=generate_latest(REGISTRY),
         media_type=CONTENT_TYPE_LATEST
@@ -30,7 +30,7 @@ async def metrics():
 
 @router.get("/health", response_model=HealthResponse)
 async def health_check(db: AsyncSession = Depends(get_db)):
-    """Check system health"""
+    """Check system health - No auth for health checks"""
     try:
         # Test DB connection
         await db.execute(select(1))
@@ -56,13 +56,15 @@ async def health_check(db: AsyncSession = Depends(get_db)):
             etl_status=None
         )
 
+
 @router.get("/data", response_model=DataResponse)
 async def get_data(
     coin: Optional[str] = None,
     source: Optional[str] = None,
     page: int = Query(1, ge=1),
     limit: int = Query(20, ge=1, le=100),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    api_key: str = Depends(verify_api_key)  # ADD AUTH
 ):
     """Get cryptocurrency data with filters and pagination"""
     start_time = time.time()
@@ -96,8 +98,12 @@ async def get_data(
         data=[CryptoResponse.from_orm(item) for item in data]
     )
 
+
 @router.get("/stats", response_model=StatsResponse)
-async def get_stats(db: AsyncSession = Depends(get_db)):
+async def get_stats(
+    db: AsyncSession = Depends(get_db),
+    api_key: str = Depends(verify_api_key)  # ADD AUTH
+):
     """Get ETL statistics"""
     # Total records
     total_result = await db.execute(select(func.count(CryptoCurrency.id)))
@@ -144,8 +150,12 @@ async def get_stats(db: AsyncSession = Depends(get_db)):
         records_by_source=records_by_source
     )
 
+
 @router.post("/etl/run")
-async def trigger_etl(db: AsyncSession = Depends(get_db)):
+async def trigger_etl(
+    db: AsyncSession = Depends(get_db),
+    api_key: str = Depends(verify_api_key)  # ADD AUTH
+):
     """
     Manually trigger all ETL pipelines
     """
