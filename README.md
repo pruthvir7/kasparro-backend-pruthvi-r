@@ -14,6 +14,13 @@
 # Health ✅
 curl https://kasparro-api-545961211138.asia-south1.run.app/api/v1/health
 
+# Metrics ✅
+curl https://kasparro-api-545961211138.asia-south1.run.app/api/v1/metrics
+
+# Stats ✅
+curl -H "X-API-Key: kasparro_secret_key_2025" \
+  "https://kasparro-api-545961211138.asia-south1.run.app/api/v1/stats"
+
 # BTC Normalization (2 sources → 1 coin) ✅
 curl -H "X-API-Key: kasparro_secret_key_2025" \
   "https://kasparro-api-545961211138.asia-south1.run.app/api/v1/coins?limit=200" \
