@@ -158,21 +158,21 @@ text
 Test the live API:
 ```
 # Health check
-curl https://kasparro-api-545961211138.asia-south1.run.app/api/v1/health
+curl https://kasparro-api-nk6gux63sq-el.a.run.app/api/v1/health
 
 # Get data (requires API key)
 curl -H "X-API-Key: kasparro_secret_key_2025" \
-  "https://kasparro-api-545961211138.asia-south1.run.app/api/v1/data?limit=5"
+  "https://kasparro-api-nk6gux63sq-el.a.run.app/api/v1/data?limit=5"
 
 # View statistics
 curl -H "X-API-Key: kasparro_secret_key_2025" \
-  "https://kasparro-api-545961211138.asia-south1.run.app/api/v1/stats"
+  "https://kasparro-api-nk6gux63sq-el.a.run.app/api/v1/stats"
 ```
 
 **View Cloud Resources:**
 - [Cloud Scheduler (Cron Jobs)](https://console.cloud.google.com/cloudscheduler?project=forward-logic-482607-k3)
 - [Cloud Run Logs](https://console.cloud.google.com/run/detail/asia-south1/kasparro-api/logs?project=forward-logic-482607-k3)
-- [API Documentation](https://kasparro-api-545961211138.asia-south1.run.app/docs)
+- [API Documentation](https://kasparro-api-nk6gux63sq-el.a.run.app/docs)
 
 ---
 
@@ -274,7 +274,7 @@ X-API-Key: kasparro_secret_key_2025
 **Example:**
 ```
 curl -H "X-API-Key: kasparro_secret_key_2025" \
-  "https://kasparro-api-545961211138.asia-south1.run.app/api/v1/data?coin=BTC&limit=5"
+  "https://kasparro-api-nk6gux63sq-el.a.run.app/api/v1/data?coin=BTC&limit=5"
 ```
 
 **Response:**
@@ -326,7 +326,7 @@ Returns ETL statistics and data source breakdown:
 Manually triggers all ETL pipelines:
 ```
 curl -X POST -H "X-API-Key: kasparro_secret_key_2025" \
-  "https://kasparro-api-545961211138.asia-south1.run.app/api/v1/etl/run"
+  "https://kasparro-api-nk6gux63sq-el.a.run.app/api/v1/etl/run"
 ```
 
 **Response:**
@@ -563,7 +563,7 @@ gcloud scheduler jobs list --location=asia-south1
 - **[README.md](README.md)** - This file (project overview)
 - **[DEPLOYMENT.md](DEPLOYMENT.md)** - Local Docker deployment guide
 - **[CLOUD_DEPLOYMENT.md](CLOUD_DEPLOYMENT.md)** - GCP cloud deployment guide
-- **[API Docs](https://kasparro-api-545961211138.asia-south1.run.app/docs)** - Interactive Swagger UI
+- **[API Docs](https://kasparro-api-nk6gux63sq-el.a.run.app/docs)** - Interactive Swagger UI
 
 ---
 
@@ -573,7 +573,7 @@ gcloud scheduler jobs list --location=asia-south1
 
 1. **Test Live API:**
    ```
-   curl https://kasparro-api-545961211138.asia-south1.run.app/api/v1/health
+   curl https://kasparro-api-nk6gux63sq-el.a.run.app/api/v1/health
    ```
 
 2. **View Cloud Scheduler (Cron Jobs):**
@@ -618,8 +618,8 @@ gcloud scheduler jobs list --location=asia-south1
 ## 🤝 Support
 
 **Repository:** https://github.com/pruthvir7/kasparro-backend-pruthvi-r  
-**Live API:** https://kasparro-api-545961211138.asia-south1.run.app  
-**Documentation:** https://kasparro-api-545961211138.asia-south1.run.app/docs
+**Live API:** https://kasparro-api-nk6gux63sq-el.a.run.app  
+**Documentation:** https://kasparro-api-nk6gux63sq-el.a.run.app/docs
 
 ---
 

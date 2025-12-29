@@ -3,7 +3,7 @@
 ## Deployed Services
 
 ### 1. Cloud Run API
-**Service URL:** https://kasparro-api-nk6gux63sq-el.a.run.app
+**Service URL:** https://kasparro-api-545961211138.asia-south1.run.app
 
 **Endpoints:**
 - Health: `GET /api/v1/health`
@@ -57,25 +57,25 @@ https://console.cloud.google.com/sql/instances/kasparro-db/overview?project=forw
 
 ### Test API Health
 ```
-curl https://kasparro-api-nk6gux63sq-el.a.run.app/api/v1/health
+curl https://kasparro-api-545961211138.asia-south1.run.app/api/v1/health
 ```
 
 ### Test Data Endpoint (with API Key)
 ```
 curl -H "X-API-Key: kasparro_secret_key_2025" \
-  "https://kasparro-api-nk6gux63sq-el.a.run.app/api/v1/data?limit=5"
+  "https://kasparro-api-545961211138.asia-south1.run.app/api/v1/data?limit=5"
 ```
 
 ### Test Statistics
 ```
 curl -H "X-API-Key: kasparro_secret_key_2025" \
-  "https://kasparro-api-nk6gux63sq-el.a.run.app/api/v1/stats"
+  "https://kasparro-api-545961211138.asia-south1.run.app/api/v1/stats"
 ```
 
 ### Manually Trigger ETL
 ```
 curl -X POST -H "X-API-Key: kasparro_secret_key_2025" \
-  "https://kasparro-api-nk6gux63sq-el.a.run.app/api/v1/etl/run"
+  "https://kasparro-api-545961211138.asia-south1.run.app/api/v1/etl/run"
 ```
 
 ### Manually Trigger Cron Job
@@ -108,7 +108,7 @@ gcloud logging read "resource.type=cloud_run_revision AND resource.labels.servic
 
 ### Prometheus Metrics Endpoint
 ```
-https://kasparro-api-nk6gux63sq-el.a.run.app/api/v1/metrics
+https://kasparro-api-545961211138.asia-south1.run.app/api/v1/metrics
 ```
 
 ### Key Metrics:
@@ -212,11 +212,11 @@ External Data Sources:
    gcloud scheduler jobs create http kasparro-etl-hourly \
      --location=asia-south1 \
      --schedule="0 * * * *" \
-     --uri="https://kasparro-api-nk6gux63sq-el.a.run.app/api/v1/etl/run" \
+     --uri="https://kasparro-api-545961211138.asia-south1.run.app/api/v1/etl/run" \
      --http-method=POST \
      --headers="X-API-Key=kasparro_secret_key_2025" \
      --oidc-service-account-email="cloud-scheduler-sa@PROJECT_ID.iam.gserviceaccount.com" \
-     --oidc-token-audience="https://kasparro-api-nk6gux63sq-el.a.run.app"
+     --oidc-token-audience="https://kasparro-api-545961211138.asia-south1.run.app"
    ```
 
 ---
@@ -276,7 +276,7 @@ gcloud scheduler jobs describe kasparro-etl-hourly --location=asia-south1
 ### Manual ETL Trigger
 ```
 curl -X POST -H "X-API-Key: kasparro_secret_key_2025" \
-  "https://kasparro-api-nk6gux63sq-el.a.run.app/api/v1/etl/run"
+  "https://kasparro-api-545961211138.asia-south1.run.app/api/v1/etl/run"
 ```
 
 ---
@@ -336,7 +336,7 @@ gcloud sql backups create --instance=kasparro-db
 **Related Documentation:**
 - [README.md](README.md) - Project overview
 - [DEPLOYMENT.md](DEPLOYMENT.md) - Local deployment guide
-- [API Documentation](https://kasparro-api-nk6gux63sq-el.a.run.app/docs) - Interactive API docs
+- [API Documentation](https://kasparro-api-545961211138.asia-south1.run.app/docs) - Interactive API docs
 
 **GCP Console:**
 - [Project Dashboard](https://console.cloud.google.com/home/dashboard?project=forward-logic-482607-k3)
