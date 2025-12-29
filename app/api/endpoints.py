@@ -1,8 +1,11 @@
-from fastapi import APIRouter, Depends, Query, Security
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, desc
+from sqlalchemy import select, func, desc, distinct
 from app.core.database import get_db
-from app.models.models import CryptoCurrency, Checkpoint, ETLRun
+from app.models.models import (
+    CryptoCurrency, Checkpoint, ETLRun,
+    Coin, CoinPrice, CoinIdentifier  # NEW: Normalized models
+)
 from app.schemas.crypto import DataResponse, CryptoResponse, HealthResponse, StatsResponse
 import uuid
 import time
@@ -14,7 +17,8 @@ from app.utils.metrics import (
     api_request_duration,
     crypto_records_total
 )
-from app.core.auth import verify_api_key  # ADD THIS IMPORT
+from app.core.auth import verify_api_key
+
 
 router = APIRouter()
 
@@ -64,28 +68,68 @@ async def get_data(
     page: int = Query(1, ge=1),
     limit: int = Query(20, ge=1, le=100),
     db: AsyncSession = Depends(get_db),
-    api_key: str = Depends(verify_api_key)  # ADD AUTH
+    api_key: str = Depends(verify_api_key)
 ):
-    """Get cryptocurrency data with filters and pagination"""
+    """
+    Get cryptocurrency data from NORMALIZED SCHEMA.
+    
+    NEW: Returns data where coins are unified across sources.
+    BTC from CoinPaprika + BTC from CoinGecko = ONE Bitcoin entity.
+    """
     start_time = time.time()
     request_id = str(uuid.uuid4())
     
-    # Build query
-    query = select(CryptoCurrency)
-    if coin:
-        query = query.where(CryptoCurrency.symbol == coin.upper())
-    if source:
-        query = query.where(CryptoCurrency.source == source)
+    # Build query for normalized data (Coin + CoinPrice)
+    query = (
+        select(
+            Coin.id,
+            Coin.symbol,
+            Coin.name,
+            CoinPrice.price_usd,
+            CoinPrice.market_cap,
+            CoinPrice.volume_24h,
+            CoinPrice.source,
+            CoinPrice.timestamp
+        )
+        .join(CoinPrice, Coin.id == CoinPrice.coin_id)
+        .order_by(Coin.symbol, CoinPrice.timestamp.desc())
+    )
     
-    # Get total count
-    count_query = select(func.count()).select_from(query.subquery())
+    # Apply filters
+    if coin:
+        query = query.where(Coin.symbol == coin.upper())
+    if source:
+        query = query.where(CoinPrice.source == source)
+    
+    # Get total count (unique coins, not price records)
+    count_query = select(func.count(distinct(Coin.id))).select_from(Coin).join(CoinPrice)
+    if coin:
+        count_query = count_query.where(Coin.symbol == coin.upper())
+    if source:
+        count_query = count_query.where(CoinPrice.source == source)
+    
     total_result = await db.execute(count_query)
     total_count = total_result.scalar()
     
     # Apply pagination
     query = query.offset((page - 1) * limit).limit(limit)
     result = await db.execute(query)
-    data = result.scalars().all()
+    records = result.all()
+    
+    # Format data
+    data = []
+    for record in records:
+        data.append({
+            "id": record.id,
+            "coin_id": f"{record.source}:{record.symbol}",  # Keep for compatibility
+            "name": record.name,
+            "symbol": record.symbol,
+            "price_usd": record.price_usd,
+            "market_cap": record.market_cap,
+            "volume_24h": record.volume_24h,
+            "source": record.source,
+            "last_updated": record.timestamp
+        })
     
     latency = (time.time() - start_time) * 1000
     
@@ -95,24 +139,32 @@ async def get_data(
         total_count=total_count,
         page=page,
         limit=limit,
-        data=[CryptoResponse.from_orm(item) for item in data]
+        data=data
     )
 
 
 @router.get("/stats", response_model=StatsResponse)
 async def get_stats(
     db: AsyncSession = Depends(get_db),
-    api_key: str = Depends(verify_api_key)  # ADD AUTH
+    api_key: str = Depends(verify_api_key)
 ):
-    """Get ETL statistics"""
-    # Total records
-    total_result = await db.execute(select(func.count(CryptoCurrency.id)))
-    total_records = total_result.scalar()
+    """
+    Get ETL statistics from NORMALIZED SCHEMA.
+    
+    NEW: Shows stats based on canonical coins (unified across sources).
+    """
+    # Total canonical coins (unique entities)
+    coin_count_result = await db.execute(select(func.count(Coin.id)))
+    total_coins = coin_count_result.scalar()
+    
+    # Total price records
+    price_count_result = await db.execute(select(func.count(CoinPrice.id)))
+    total_records = price_count_result.scalar()
     
     # Records by source
     source_result = await db.execute(
-        select(CryptoCurrency.source, func.count(CryptoCurrency.id))
-        .group_by(CryptoCurrency.source)
+        select(CoinPrice.source, func.count(CoinPrice.id))
+        .group_by(CoinPrice.source)
     )
     records_by_source = {row[0]: row[1] for row in source_result.all()}
     
@@ -141,9 +193,15 @@ async def get_stats(
     )
     avg_duration = avg_result.scalar()
     
+    # Count unique sources
+    source_count_result = await db.execute(
+        select(func.count(distinct(CoinPrice.source)))
+    )
+    total_sources = source_count_result.scalar()
+    
     return StatsResponse(
         total_records=total_records,
-        total_sources=len(records_by_source),
+        total_sources=total_sources,
         last_success=last_success,
         last_failure=last_failure,
         avg_duration_seconds=round(avg_duration, 2) if avg_duration else None,
@@ -154,10 +212,12 @@ async def get_stats(
 @router.post("/etl/run")
 async def trigger_etl(
     db: AsyncSession = Depends(get_db),
-    api_key: str = Depends(verify_api_key)  # ADD AUTH
+    api_key: str = Depends(verify_api_key)
 ):
     """
-    Manually trigger all ETL pipelines
+    Manually trigger all ETL pipelines.
+    
+    NEW: ETL now loads data into normalized schema (Coin -> CoinPrice).
     """
     try:
         from app.etl.coinpaprika_etl import CoinPaprikaETL
@@ -192,6 +252,53 @@ async def trigger_etl(
             "message": "ETL pipelines completed",
             "results": results
         }
+    except Exception as e:
+        return {
+            "status": "error",
+            "message": str(e)
+        }
+
+
+@router.get("/coins")
+async def get_canonical_coins(
+    db: AsyncSession = Depends(get_db),
+    api_key: str = Depends(verify_api_key)
+):
+    """
+    NEW ENDPOINT: Get list of canonical coins with source mappings.
+    
+    Shows how coins are unified across sources.
+    Example: BTC has identifiers from coinpaprika (btc-bitcoin), coingecko (bitcoin), csv (btc)
+    """
+    try:
+        # Get all coins with their identifiers
+        result = await db.execute(
+            select(Coin, CoinIdentifier)
+            .join(CoinIdentifier, Coin.id == CoinIdentifier.coin_id)
+            .order_by(Coin.symbol)
+        )
+        
+        # Group by coin
+        coins_dict = {}
+        for coin, identifier in result.all():
+            if coin.symbol not in coins_dict:
+                coins_dict[coin.symbol] = {
+                    "symbol": coin.symbol,
+                    "name": coin.name,
+                    "created_at": coin.created_at.isoformat(),
+                    "source_identifiers": []
+                }
+            
+            coins_dict[coin.symbol]["source_identifiers"].append({
+                "source": identifier.source,
+                "source_id": identifier.source_id
+            })
+        
+        return {
+            "total_coins": len(coins_dict),
+            "coins": list(coins_dict.values())
+        }
+        
     except Exception as e:
         return {
             "status": "error",

@@ -59,6 +59,58 @@ curl -H "X-API-Key: kasparro_secret_key_2025" \
 └────────────────┘  └─────────────┘  └────────────────┘
 ```
 
+---
+
+## 🔄 Data Normalization
+
+### Why Normalization?
+
+**Problem:** Without normalization, the same cryptocurrency from different sources creates duplicate records:
+
+CoinPaprika: btc-bitcoin → Bitcoin → $94,000
+CoinGecko: bitcoin → Bitcoin → $94,050
+CSV: BTC → Bitcoin → $94,100
+
+Result: 3 separate Bitcoin records ❌
+
+text
+
+### Solution: Symbol-Based Unification
+
+Our system uses a **normalized schema** that unifies coins across sources:
+
+**Database Structure:**
+1. **`coins`** - ONE canonical record per cryptocurrency (114 total)
+2. **`coin_identifiers`** - Maps source-specific IDs to canonical coins (202 mappings)
+3. **`coin_prices`** - Historical price data from all sources (404+ records)
+
+**Normalized Result:**
+
+coins: id=1, symbol=BTC, name=Bitcoin
+
+coin_identifiers: coin_id=1, source=coinpaprika, source_id=btc-bitcoin
+coin_id=1, source=coingecko, source_id=bitcoin
+coin_id=1, source=csv, source_id=BTC
+
+coin_prices: coin_id=1, source=coinpaprika, price=94000
+coin_id=1, source=coingecko, price=94050
+coin_id=1, source=csv, price=94100
+
+Result: 1 unified Bitcoin with 3 source identifiers ✅
+
+text
+
+### Benefits
+
+✅ **No Duplicates** - 114 coins (not 300+)  
+✅ **Multi-Source Support** - Same coin from different APIs unified  
+✅ **Historical Tracking** - Price history grows over time  
+✅ **Query Efficiency** - Get all data for BTC in one query  
+
+**📚 Full technical details:** [ARCHITECTURE.md](ARCHITECTURE.md)
+
+---
+
 **Data Flow:**
 1. Cloud Scheduler triggers ETL hourly via POST to `/api/v1/etl/run`
 2. ETL extracts from 3 sources (CoinPaprika, CoinGecko, CSV)

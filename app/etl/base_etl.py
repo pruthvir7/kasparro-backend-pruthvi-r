@@ -1,20 +1,22 @@
 from abc import ABC, abstractmethod
 from sqlalchemy import select, update
-from app.models.models import Checkpoint, ETLRun
+from app.models.models import Checkpoint, ETLRun, CoinPrice
+from app.utils.coin_normalizer import CoinNormalizer  # NEW
 from datetime import datetime
 import structlog
 from tenacity import retry, stop_after_attempt, wait_exponential
 from app.utils.metrics import etl_runs_total, etl_duration_seconds, etl_records_processed
 import time
 
-
 logger = structlog.get_logger()
+
 
 class BaseETL(ABC):
     def __init__(self, db_session, source_name: str):
         self.db = db_session
         self.source_name = source_name
         self.run_id = None
+        self.normalizer = CoinNormalizer(db_session)  # NEW: Add normalizer
     
     async def get_checkpoint(self):
         """Get last checkpoint for this source"""
@@ -87,16 +89,84 @@ class BaseETL(ABC):
     
     @abstractmethod
     async def transform(self, raw_data):
-        """Transform data to unified schema"""
+        """
+        Transform data to unified schema.
+        
+        IMPORTANT: Must return records with these fields:
+        - coin_id: Source-specific ID
+        - symbol: Ticker symbol (used for normalization)
+        - name: Full coin name
+        - price_usd: Current price
+        - market_cap: Market cap (optional)
+        - volume_24h: 24h volume (optional)
+        """
         pass
     
-    @abstractmethod
     async def load(self, transformed_data):
-        """Load data into database"""
-        pass
+        """
+        Load data into normalized schema (NEW IMPLEMENTATION).
+        
+        This method now:
+        1. Gets or creates canonical coins using normalizer
+        2. Creates CoinPrice records linked to canonical coins
+        3. Handles duplicates gracefully
+        """
+        loaded_count = 0
+        errors = []
+        
+        for record in transformed_data:
+            try:
+                # Validate required fields
+                if not all(k in record for k in ['symbol', 'name', 'coin_id', 'price_usd']):
+                    logger.warning("skipping_invalid_record", record=record)
+                    continue
+                
+                # Get or create canonical coin (KEY NORMALIZATION STEP!)
+                coin = await self.normalizer.get_or_create_coin(
+                    symbol=record['symbol'],
+                    name=record['name'],
+                    source=self.source_name,
+                    source_id=record['coin_id']
+                )
+                
+                # Create price record linked to canonical coin
+                price = CoinPrice(
+                    coin_id=coin.id,
+                    source=self.source_name,
+                    price_usd=float(record['price_usd']),
+                    market_cap=float(record['market_cap']) if record.get('market_cap') else None,
+                    volume_24h=float(record['volume_24h']) if record.get('volume_24h') else None,
+                    timestamp=datetime.utcnow()
+                )
+                self.db.add(price)
+                loaded_count += 1
+                
+                # Batch commit every 50 records
+                if loaded_count % 50 == 0:
+                    await self.db.commit()
+                    logger.debug("batch_committed", source=self.source_name, count=loaded_count)
+                
+            except Exception as e:
+                error_msg = f"Failed to load {record.get('symbol', 'unknown')}: {str(e)}"
+                logger.error("load_error", error=error_msg)
+                errors.append(error_msg)
+                continue
+        
+        # Final commit
+        try:
+            await self.db.commit()
+            logger.info("load_complete", source=self.source_name, loaded=loaded_count)
+        except Exception as e:
+            logger.error("commit_failed", error=str(e))
+            await self.db.rollback()
+        
+        if errors:
+            logger.warning("load_errors", source=self.source_name, error_count=len(errors))
+        
+        return loaded_count
     
     async def run(self):
-        """Execute full ETL pipeline"""
+        """Execute full ETL pipeline with normalization"""
         logger.info("etl_started", source=self.source_name)
         await self.start_run()
         
@@ -107,26 +177,33 @@ class BaseETL(ABC):
             raw_data = await self.extract()
             logger.info("extract_complete", source=self.source_name, count=len(raw_data))
             
+            if not raw_data:
+                logger.warning("no_data_extracted", source=self.source_name)
+                await self.end_run("success", 0)
+                return 0
+            
             # Transform
             transformed_data = await self.transform(raw_data)
             logger.info("transform_complete", source=self.source_name, count=len(transformed_data))
             
-            # Load
-            await self.load(transformed_data)
-            logger.info("load_complete", source=self.source_name, count=len(transformed_data))
+            # Load (now uses normalization)
+            loaded_count = await self.load(transformed_data)
+            logger.info("load_complete", source=self.source_name, count=loaded_count)
             
             # Update checkpoint
             last_id = transformed_data[-1].get('coin_id') if transformed_data else None
-            await self.update_checkpoint(last_id, len(transformed_data), "success")
-            await self.end_run("success", len(transformed_data))
+            await self.update_checkpoint(last_id, loaded_count, "success")
+            await self.end_run("success", loaded_count)
             
             # Track metrics
             duration = time.time() - start_time
             etl_runs_total.labels(source=self.source_name, status="success").inc()
             etl_duration_seconds.labels(source=self.source_name).observe(duration)
-            etl_records_processed.labels(source=self.source_name).inc(len(transformed_data))
+            etl_records_processed.labels(source=self.source_name).inc(loaded_count)
             
-            return len(transformed_data)
+            logger.info("etl_success", source=self.source_name, records=loaded_count, duration=duration)
+            
+            return loaded_count
             
         except Exception as e:
             logger.error("etl_failed", source=self.source_name, error=str(e))
@@ -137,4 +214,3 @@ class BaseETL(ABC):
             etl_runs_total.labels(source=self.source_name, status="failed").inc()
             
             raise
-
