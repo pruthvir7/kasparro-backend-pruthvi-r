@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, desc, distinct
 from app.core.database import get_db
@@ -9,6 +9,7 @@ from app.models.models import (
 from app.schemas.crypto import DataResponse, CryptoResponse, HealthResponse, StatsResponse
 import uuid
 import time
+import structlog
 from typing import Optional
 from prometheus_client import generate_latest, CONTENT_TYPE_LATEST, REGISTRY
 from fastapi.responses import Response
@@ -19,6 +20,7 @@ from app.utils.metrics import (
 )
 from app.core.auth import verify_api_key
 
+logger = structlog.get_logger()
 
 router = APIRouter()
 
@@ -61,86 +63,88 @@ async def health_check(db: AsyncSession = Depends(get_db)):
         )
 
 
-@router.get("/data", response_model=DataResponse)
+@router.get("/data")  # ✅ Fixed: @router instead of @app
 async def get_data(
     coin: Optional[str] = None,
     source: Optional[str] = None,
     page: int = Query(1, ge=1),
     limit: int = Query(20, ge=1, le=100),
-    db: AsyncSession = Depends(get_db),
-    api_key: str = Depends(verify_api_key)
+    api_key: str = Depends(verify_api_key),
+    db: AsyncSession = Depends(get_db)
 ):
     """
-    Get cryptocurrency data from NORMALIZED SCHEMA.
+    Get cryptocurrency price data (normalized).
     
-    NEW: Returns data where coins are unified across sources.
-    BTC from CoinPaprika + BTC from CoinGecko = ONE Bitcoin entity.
+    Returns price records with canonical coin references.
     """
-    start_time = time.time()
     request_id = str(uuid.uuid4())
+    start_time = time.time()
     
-    # Build query for normalized data (Coin + CoinPrice)
-    query = (
-        select(
-            Coin.id,
+    try:
+        # Build query joining normalized tables
+        query = select(
+            CoinPrice.id,
+            Coin.id.label("coin_id"),
             Coin.symbol,
             Coin.name,
             CoinPrice.price_usd,
             CoinPrice.market_cap,
             CoinPrice.volume_24h,
             CoinPrice.source,
-            CoinPrice.timestamp
+            CoinPrice.timestamp.label("last_updated")
+        ).join(
+            Coin, CoinPrice.coin_id == Coin.id
         )
-        .join(CoinPrice, Coin.id == CoinPrice.coin_id)
-        .order_by(Coin.symbol, CoinPrice.timestamp.desc())
-    )
-    
-    # Apply filters
-    if coin:
-        query = query.where(Coin.symbol == coin.upper())
-    if source:
-        query = query.where(CoinPrice.source == source)
-    
-    # Get total count (unique coins, not price records)
-    count_query = select(func.count(distinct(Coin.id))).select_from(Coin).join(CoinPrice)
-    if coin:
-        count_query = count_query.where(Coin.symbol == coin.upper())
-    if source:
-        count_query = count_query.where(CoinPrice.source == source)
-    
-    total_result = await db.execute(count_query)
-    total_count = total_result.scalar()
-    
-    # Apply pagination
-    query = query.offset((page - 1) * limit).limit(limit)
-    result = await db.execute(query)
-    records = result.all()
-    
-    # Format data
-    data = []
-    for record in records:
-        data.append({
-            "id": record.id,
-            "coin_id": f"{record.source}:{record.symbol}",  # Keep for compatibility
-            "name": record.name,
-            "symbol": record.symbol,
-            "price_usd": record.price_usd,
-            "market_cap": record.market_cap,
-            "volume_24h": record.volume_24h,
-            "source": record.source,
-            "last_updated": record.timestamp
-        })
-    
-    latency = (time.time() - start_time) * 1000
-    
-    return DataResponse(
-        request_id=request_id,
-        api_latency_ms=round(latency, 2),
-        total_count=total_count,
-        page=page,
-        limit=limit,
-        data=data
-    )
+        
+        # Apply filters
+        if coin:
+            query = query.filter(Coin.symbol == coin.upper())
+        if source:
+            query = query.filter(CoinPrice.source == source)
+        
+        # Count total
+        count_query = select(func.count()).select_from(query.subquery())
+        total_result = await db.execute(count_query)
+        total_count = total_result.scalar()
+        
+        # Apply pagination
+        query = query.order_by(CoinPrice.timestamp.desc())
+        query = query.offset((page - 1) * limit).limit(limit)
+        
+        # Execute
+        result = await db.execute(query)
+        rows = result.fetchall()
+        
+        # Format response
+        data = [
+            {
+                "id": row.id,
+                "coin_id": row.coin_id,
+                "symbol": row.symbol,
+                "name": row.name,
+                "price_usd": float(row.price_usd) if row.price_usd else None,
+                "market_cap": float(row.market_cap) if row.market_cap else None,
+                "volume_24h": float(row.volume_24h) if row.volume_24h else None,
+                "source": row.source,
+                "last_updated": row.last_updated.isoformat() if row.last_updated else None
+            }
+            for row in rows
+        ]
+        
+        latency_ms = round((time.time() - start_time) * 1000, 2)
+        
+        return {
+            "request_id": request_id,
+            "api_latency_ms": latency_ms,
+            "total_count": total_count,
+            "page": page,
+            "limit": limit,
+            "data": data
+        }
+        
+    except Exception as e:
+        logger.error(f"Error in get_data: {e}", request_id=request_id)
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.get("/stats", response_model=StatsResponse)
@@ -261,6 +265,8 @@ async def trigger_etl(
 
 @router.get("/coins")
 async def get_canonical_coins(
+    limit: int = Query(20, ge=1, le=100),  # ✅ Added pagination
+    page: int = Query(1, ge=1),
     db: AsyncSession = Depends(get_db),
     api_key: str = Depends(verify_api_key)
 ):
@@ -276,31 +282,39 @@ async def get_canonical_coins(
             select(Coin, CoinIdentifier)
             .join(CoinIdentifier, Coin.id == CoinIdentifier.coin_id)
             .order_by(Coin.symbol)
+            .offset((page - 1) * limit)
+            .limit(limit)
         )
         
         # Group by coin
         coins_dict = {}
         for coin, identifier in result.all():
-            if coin.symbol not in coins_dict:
-                coins_dict[coin.symbol] = {
+            if coin.id not in coins_dict:  # ✅ Use coin.id instead of symbol (handles duplicates better)
+                coins_dict[coin.id] = {
+                    "id": coin.id,
                     "symbol": coin.symbol,
                     "name": coin.name,
                     "created_at": coin.created_at.isoformat(),
                     "source_identifiers": []
                 }
             
-            coins_dict[coin.symbol]["source_identifiers"].append({
+            coins_dict[coin.id]["source_identifiers"].append({
                 "source": identifier.source,
-                "source_id": identifier.source_id
+                "source_id": identifier.source_id,
+                "created_at": identifier.created_at.isoformat()
             })
         
+        # Get total count
+        count_result = await db.execute(select(func.count(distinct(Coin.id))))
+        total_count = count_result.scalar()
+        
         return {
-            "total_coins": len(coins_dict),
+            "total_count": total_count,
+            "page": page,
+            "limit": limit,
             "coins": list(coins_dict.values())
         }
         
     except Exception as e:
-        return {
-            "status": "error",
-            "message": str(e)
-        }
+        logger.error(f"Error in get_canonical_coins: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
