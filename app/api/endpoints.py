@@ -265,54 +265,69 @@ async def trigger_etl(
 
 @router.get("/coins")
 async def get_canonical_coins(
-    limit: int = Query(20, ge=1, le=100),  # ✅ Added pagination
+    limit: int = Query(20, ge=1, le=200),
     page: int = Query(1, ge=1),
     db: AsyncSession = Depends(get_db),
     api_key: str = Depends(verify_api_key)
 ):
     """
-    NEW ENDPOINT: Get list of canonical coins with source mappings.
-    
-    Shows how coins are unified across sources.
-    Example: BTC has identifiers from coinpaprika (btc-bitcoin), coingecko (bitcoin), csv (btc)
+    Get canonical coins with source mappings.
+    Fixed: Paginate coins FIRST, then get their identifiers.
     """
     try:
-        # Get all coins with their identifiers
-        result = await db.execute(
-            select(Coin, CoinIdentifier)
-            .join(CoinIdentifier, Coin.id == CoinIdentifier.coin_id)
+        # Get total count of coins
+        count_result = await db.execute(select(func.count(Coin.id)))
+        total_count = count_result.scalar()
+        
+        # Get paginated list of coins FIRST
+        coins_result = await db.execute(
+            select(Coin)
             .order_by(Coin.symbol)
             .offset((page - 1) * limit)
             .limit(limit)
         )
+        coins = coins_result.scalars().all()
         
-        # Group by coin
-        coins_dict = {}
-        for coin, identifier in result.all():
-            if coin.id not in coins_dict:  # ✅ Use coin.id instead of symbol (handles duplicates better)
-                coins_dict[coin.id] = {
-                    "id": coin.id,
-                    "symbol": coin.symbol,
-                    "name": coin.name,
-                    "created_at": coin.created_at.isoformat(),
-                    "source_identifiers": []
-                }
+        # Get identifiers for these specific coins
+        coin_ids = [coin.id for coin in coins]
+        
+        if coin_ids:
+            identifiers_result = await db.execute(
+                select(CoinIdentifier)
+                .where(CoinIdentifier.coin_id.in_(coin_ids))
+                .order_by(CoinIdentifier.coin_id, CoinIdentifier.source)
+            )
+            identifiers = identifiers_result.scalars().all()
             
-            coins_dict[coin.id]["source_identifiers"].append({
-                "source": identifier.source,
-                "source_id": identifier.source_id,
-                "created_at": identifier.created_at.isoformat()
-            })
+            # Group identifiers by coin_id
+            identifiers_by_coin = {}
+            for identifier in identifiers:
+                if identifier.coin_id not in identifiers_by_coin:
+                    identifiers_by_coin[identifier.coin_id] = []
+                identifiers_by_coin[identifier.coin_id].append({
+                    "source": identifier.source,
+                    "source_id": identifier.source_id,
+                    "created_at": identifier.created_at.isoformat()
+                })
+        else:
+            identifiers_by_coin = {}
         
-        # Get total count
-        count_result = await db.execute(select(func.count(distinct(Coin.id))))
-        total_count = count_result.scalar()
+        # Build response
+        coins_list = []
+        for coin in coins:
+            coins_list.append({
+                "id": coin.id,
+                "symbol": coin.symbol,
+                "name": coin.name,
+                "created_at": coin.created_at.isoformat(),
+                "source_identifiers": identifiers_by_coin.get(coin.id, [])
+            })
         
         return {
             "total_count": total_count,
             "page": page,
             "limit": limit,
-            "coins": list(coins_dict.values())
+            "coins": coins_list
         }
         
     except Exception as e:
