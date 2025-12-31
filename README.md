@@ -1,35 +1,48 @@
 # Kasparro Backend - Cryptocurrency ETL & API
 
+
 **Production-grade ETL pipeline and REST API for cryptocurrency data aggregation from multiple sources (CoinPaprika, CoinGecko, CSV).**
+
 
 **LIVE STATUS:** ✅ 115 coins | 81 multi-source | BTC=$87,697 | Scheduler=ENABLED
 
+
 ## 🌐 Live Deployment
+
 
 ### GCP Cloud Run (Production)
 **Production URL:** https://kasparro-api-545961211138.asia-south1.run.app
 
+
 **🔥 LIVE API Tests:**
-```
+```bash
+# Load test credentials
+source .env.test
+
 # Health ✅
 curl https://kasparro-api-545961211138.asia-south1.run.app/api/v1/health
+
 
 # Metrics ✅
 curl https://kasparro-api-545961211138.asia-south1.run.app/api/v1/metrics
 
+
 # Stats ✅
-curl -H "X-API-Key: kasparro_secret_key_2025" \
+curl -H "X-API-Key: ${API_KEY}" \
   "https://kasparro-api-545961211138.asia-south1.run.app/api/v1/stats"
 
+
 # BTC Normalization (2 sources → 1 coin) ✅
-curl -H "X-API-Key: kasparro_secret_key_2025" \
+curl -H "X-API-Key: ${API_KEY}" \
   "https://kasparro-api-545961211138.asia-south1.run.app/api/v1/coins?limit=200" \
   | jq '.coins[] | select(.symbol=="BTC")'
 
+
 # Latest BTC Price ✅
-curl -H "X-API-Key: kasparro_secret_key_2025" \
+curl -H "X-API-Key: ${API_KEY}" \
   "https://kasparro-api-545961211138.asia-south1.run.app/api/v1/data?coin=BTC&limit=1"
 ```
+
 
 **📊 Live Stats:**
 ```
@@ -40,14 +53,18 @@ curl -H "X-API-Key: kasparro_secret_key_2025" \
 ✅ BTC: $87,697 (coingecko)
 ```
 
+
 **Live Resources:**
 - [API Docs](https://kasparro-api-545961211138.asia-south1.run.app/docs)
 - [Cloud Scheduler](https://console.cloud.google.com/cloudscheduler?project=forward-logic-482607-k3)
 - [Cloud Run Logs](https://console.cloud.google.com/run/detail/asia-south1/kasparro-api/logs?project=forward-logic-482607-k3)
 
+
 ---
 
+
 ## 🏗️ Production Architecture
+
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -80,9 +97,12 @@ curl -H "X-API-Key: kasparro_secret_key_2025" \
 └────────────────┘  └─────────────┘  └────────────────┘
 ```
 
+
 ---
 
+
 ## 🔄 Data Normalization (LIVE DEMO)
+
 
 ### ❌ Problem: Duplicate Coins
 ```
@@ -91,6 +111,7 @@ CoinGecko:   bitcoin    → Bitcoin → $87,697
 CSV:         BTC        → Bitcoin → $87,500
 ```
 **Result: 3 Bitcoin records ❌**
+
 
 ### ✅ Solution: Unified Schema
 ```
@@ -102,13 +123,14 @@ coin_identifiers:
 coin_prices: coin_id=1, source=..., price=...
 ```
 
+
 **LIVE PROOF:**
-```
-curl -H "X-API-Key: kasparro_secret_key_2025" \
+```bash
+curl -H "X-API-Key: ${API_KEY}" \
   "https://kasparro-api-545961211138.asia-south1.run.app/api/v1/coins?limit=200" \
   | jq '.coins[] | select(.symbol=="BTC")'
 ```
-```
+```json
 {
   "id": 1,
   "symbol": "BTC",
@@ -120,23 +142,29 @@ curl -H "X-API-Key: kasparro_secret_key_2025" \
 }
 ```
 
+
 **✅ 81 coins unified across 3 sources!**
+
 
 ---
 
+
 ## ✨ Features
+
 
 ### Core Requirements (P0) ✅
 - ✅ Multi-source ETL → PostgreSQL normalized schema
 - ✅ FastAPI: `/health`, `/data`, `/stats`, **`/coins`** (NEW!)
 - ✅ Docker + docker-compose (local dev)
 - ✅ pytest (17 tests) + smoke_test.sh (14 E2E)
-- ✅ API Key auth (`kasparro_secret_key_2025`)
+- ✅ API Key auth (see `.env.test` for test credentials)
+
 
 ### Advanced Features (P1) ✅
 - ✅ **`/coins`** endpoint - Normalization proof (81 multi-source)
 - ✅ Idempotent upserts + checkpoints + `etl_run` tracking
 - ✅ Pagination + filtering (`/data?coin=BTC&source=coingecko`)
+
 
 ### Production Features (P2) ✅
 - ✅ Prometheus `/metrics` endpoint
@@ -145,20 +173,27 @@ curl -H "X-API-Key: kasparro_secret_key_2025" \
 - ✅ **Cloud Scheduler** (`kasparro-etl-15min`)
 - ✅ Schema drift detection
 
+
 ---
+
 
 ## 🚀 Quick Start
 
+
 ### 🌐 Production (30 seconds - LIVE)
-```
+```bash
+# Load test credentials
+source .env.test
+
 # Test LIVE API
 curl https://kasparro-api-545961211138.asia-south1.run.app/api/v1/health
-curl -H "X-API-Key: kasparro_secret_key_2025" \
+curl -H "X-API-Key: ${API_KEY}" \
   "https://kasparro-api-545961211138.asia-south1.run.app/api/v1/stats"
 ```
 
+
 ### 🐳 Local Development (5 minutes)
-```
+```bash
 git clone https://github.com/pruthvir7/kasparro-backend-pruthvi-r.git
 cd kasparro-backend-pruthvi-r
 docker-compose up --build  # Wait 90s for ETL
@@ -166,9 +201,12 @@ docker-compose up --build  # Wait 90s for ETL
 curl http://localhost:8000/api/v1/health
 ```
 
+
 ---
 
+
 ## 📡 API Endpoints
+
 
 | Endpoint | Auth | Description | Live Example |
 |----------|------|-------------|--------------|
@@ -179,17 +217,22 @@ curl http://localhost:8000/api/v1/health
 | `POST /api/v1/etl/run` | Yes | Manual ETL trigger | Triggers all 3 sources |
 | `GET /api/v1/metrics` | No | Prometheus metrics | Monitoring |
 
-**API Key:** `kasparro_secret_key_2025`
+
+**API Key:** See `.env.test` for test credentials
+
 
 ---
 
+
 ## 🧪 Comprehensive Testing
 
+
 ### Automated Tests
-```
+```bash
 pytest -v                          # 17 unit/integration tests
 ./smoke_test.sh                    # 14 end-to-end tests
 ```
+
 
 **Coverage:**
 - ETL extraction/transformation/loading
@@ -197,6 +240,7 @@ pytest -v                          # 17 unit/integration tests
 - API auth + rate limiting
 - Pagination + validation
 - Idempotency + checkpoints
+
 
 ### Production Verification
 ```
@@ -207,7 +251,9 @@ pytest -v                          # 17 unit/integration tests
 ✅ 1212 price records fresh
 ```
 
+
 ---
+
 
 ## 📁 Project Structure
 ```
@@ -226,9 +272,12 @@ kasparro-backend-pruthvi-r/
 └── CLOUD_DEPLOYMENT.md
 ```
 
+
 ---
 
+
 ## 🔍 Observability
+
 
 ### Prometheus Metrics (`/api/v1/metrics`)
 ```
@@ -237,13 +286,16 @@ etl_runs_total{source="coingecko",status="success"} 48
 crypto_records_total 1212
 ```
 
+
 ### Structured Logging
-```
+```json
 {"request_id":"uuid","level":"info","endpoint":"/coins","latency_ms":15}
 {"etl_source":"coinpaprika","records":600,"duration":42s}
 ```
 
+
 ---
+
 
 ## 🔐 Security
 - ✅ API Key auth (all data endpoints)
@@ -253,9 +305,12 @@ crypto_records_total 1212
 - ✅ SQLAlchemy ORM (SQL injection safe)
 - ✅ Pydantic validation
 
+
 ---
 
+
 ## 🎯 Evaluator Checklist
+
 
 | Requirement | Status | Live Proof |
 |-------------|--------|------------|
@@ -266,5 +321,3 @@ crypto_records_total 1212
 | Tests | ✅ 17+14 | `pytest -v && ./smoke_test.sh` |
 | Docker Local | ✅ Full stack | `docker-compose up` |
 | Documentation | ✅ Complete | This README + API Docs |
-
-

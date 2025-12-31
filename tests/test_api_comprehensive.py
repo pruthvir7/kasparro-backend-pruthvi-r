@@ -1,8 +1,11 @@
+import os
 import pytest
 from httpx import AsyncClient
 from app.main import app
 
-API_KEY = "kasparro_secret_key_2025"
+
+API_KEY = os.getenv("API_KEY", "kasparro_test_key_for_evaluation_2025")
+
 
 @pytest.mark.asyncio
 async def test_health_endpoint():
@@ -14,6 +17,7 @@ async def test_health_endpoint():
     data = response.json()
     assert "status" in data
 
+
 @pytest.mark.asyncio
 async def test_data_endpoint_requires_auth():
     """Test data endpoint requires API key"""
@@ -24,6 +28,7 @@ async def test_data_endpoint_requires_auth():
     data = response.json()
     assert "detail" in data
 
+
 @pytest.mark.asyncio
 async def test_data_endpoint_with_invalid_key():
     """Test data endpoint rejects invalid API key"""
@@ -33,6 +38,7 @@ async def test_data_endpoint_with_invalid_key():
     
     assert response.status_code == 403
 
+
 @pytest.mark.asyncio
 async def test_stats_endpoint_requires_auth():
     """Test stats endpoint requires API key"""
@@ -40,6 +46,7 @@ async def test_stats_endpoint_requires_auth():
         response = await client.get("/api/v1/stats")
     
     assert response.status_code == 403
+
 
 @pytest.mark.asyncio
 async def test_invalid_pagination():
@@ -49,6 +56,7 @@ async def test_invalid_pagination():
         response = await client.get("/api/v1/data?page=0", headers=headers)
     
     assert response.status_code == 422
+
 
 @pytest.mark.asyncio
 async def test_etl_endpoint_requires_auth():

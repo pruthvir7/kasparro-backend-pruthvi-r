@@ -1,13 +1,17 @@
 # Resubmission - Normalization Implementation Complete
 
+
 **Date:** December 29, 2025  
 **Candidate:** Pruthvi R  
-**Repository:** https://github.com/pruthvir7/kasparro-backend-pruthvi-r [attached_file:1]  
-**Live API:** https://kasparro-api-545961211138.asia-south1.run.app [attached_file:1]
+**Repository:** https://github.com/pruthvir7/kasparro-backend-pruthvi-r  
+**Live API:** https://kasparro-api-545961211138.asia-south1.run.app
+
 
 ---
 
+
 ## 🎯 Addressing Module 2 Deduction (-20 points)
+
 
 ### Original Issue
 > **ARCHITECTURAL DEFICIENCY – Normalization Not Implemented**
@@ -15,11 +19,15 @@
 > - Source-specific IDs stored directly
 > - No deterministic matching strategy
 
+
 ### ✅ **RESOLVED: Full Normalization + LIVE PROOF**
+
 
 ---
 
+
 ## 🗄️ **LIVE Normalized Schema (Verified Today)**
+
 
 ```
 coins: 115 canonical coins (UNIQUE symbols)
@@ -27,15 +35,19 @@ coin_identifiers: 202 mappings (81 multi-source coins)
 coin_prices: 1212 records (3 sources)
 ```
 
+
 **LIVE PROOF (Copy-paste):**
-```
+```bash
+# Load test credentials
+source .env.test
+
 # BTC: 2 sources → 1 canonical coin
-curl -H "X-API-Key: kasparro_secret_key_2025" \
+curl -H "X-API-Key: ${API_KEY}" \
   "https://kasparro-api-545961211138.asia-south1.run.app/api/v1/coins?limit=200" \
   | jq '.coins[] | select(.symbol=="BTC") | {symbol, source_count: (.source_identifiers | length), sources: [.source_identifiers[].source]}'
 ```
 **Live Output:**
-```
+```json
 {
   "symbol": "BTC",
   "source_count": 2,
@@ -43,42 +55,53 @@ curl -H "X-API-Key: kasparro_secret_key_2025" \
 }
 ```
 
+
 ---
+
 
 ## 🔄 **Deterministic Matching (Code + LIVE)**
 
+
 **File:** `app/etl/base_etl.py` (lines 40-75)
+
 
 **3-Step Algorithm:**
 1. ✅ **Existing identifier?** → Reuse coin
 2. ✅ **Symbol exists?** → Link source  
 3. ✅ **New symbol?** → Create canonical coin
 
+
 **LIVE Multi-Source Coins (81 total):**
-```
-curl -H "X-API-Key: kasparro_secret_key_2025" \
+```bash
+curl -H "X-API-Key: ${API_KEY}" \
   "https://kasparro-api-545961211138.asia-south1.run.app/api/v1/coins?limit=200" \
   | jq '[.coins[] | select(.source_identifiers | length >= 2)] | length'
 ```
 **Result:** `81` ✅
 
+
 ---
+
 
 ## 📊 **LIVE Database Proof (Right Now)**
 
-```
+
+```bash
 # Health + ETL status
 curl https://kasparro-api-545961211138.asia-south1.run.app/api/v1/health | jq '{status, etl_last_run, etl_status}'
 
+
 # Stats (1212 records, 3 sources)
-curl -H "X-API-Key: kasparro_secret_key_2025" \
+curl -H "X-API-Key: ${API_KEY}" \
   "https://kasparro-api-545961211138.asia-south1.run.app/api/v1/stats" | jq '{total_records, total_sources, records_by_source}'
 
+
 # BTC + ETH + USDT unified
-curl -H "X-API-Key: kasparro_secret_key_2025" \
+curl -H "X-API-Key: ${API_KEY}" \
   "https://kasparro-api-545961211138.asia-south1.run.app/api/v1/coins?limit=200" \
   | jq '.coins[] | select(.symbol | in(["BTC","ETH","USDT"])) | {symbol, source_count: (.source_identifiers | length)}'
 ```
+
 
 **Live Results (Dec 29, 2025):**
 ```
@@ -87,9 +110,12 @@ Stats: {"total_records":1212,"total_sources":3,"records_by_source":{"csv":12,"co
 Coins: BTC=2, ETH=2, USDT=2 ✅
 ```
 
+
 ---
 
+
 ## 🆕 **Updated Files (Normalization Complete)**
+
 
 | File | OLD (Failed) | NEW (Fixed) |
 |------|--------------|-------------|
@@ -98,11 +124,15 @@ Coins: BTC=2, ETH=2, USDT=2 ✅
 | `app/api/endpoints.py` | No `/coins` | **NEW** `GET /api/v1/coins` (81 multi-source) |
 | `app/etl/*.py` | Direct inserts | Calls `get_or_create_coin()` |
 
+
 **Key Addition:** `/api/v1/coins` endpoint proves normalization to evaluators.
+
 
 ---
 
+
 ## ✅ **Production Infrastructure (All LIVE)**
+
 
 | Service | Status | Details |
 |---------|--------|---------|
@@ -110,55 +140,71 @@ Coins: BTC=2, ETH=2, USDT=2 ✅
 | **Cloud SQL** | ✅ 1212 records | `kasparro-db` (asia-south1) |
 | **Scheduler** | ✅ **kasparro-etl-15min** | `*/15 * * * *` (every 15min) |
 
+
 **Verify Scheduler:**
-```
+```bash
 gcloud scheduler jobs list --location=asia-south1
 ```
 **Result:** `kasparro-etl-15min ENABLED */15 * * * *`
 
+
 ---
+
 
 ## 🧪 **Idempotency Proof (No Duplicates)**
 
-```
+
+```bash
 # Run ETL twice → Coin count STAYS 115
-curl -X POST -H "X-API-Key: kasparro_secret_key_2025" \
+curl -X POST -H "X-API-Key: ${API_KEY}" \
   "https://kasparro-api-545961211138.asia-south1.run.app/api/v1/etl/run"
 
-curl -H "X-API-Key: kasparro_secret_key_2025" \
+
+curl -H "X-API-Key: ${API_KEY}" \
   "https://kasparro-api-545961211138.asia-south1.run.app/api/v1/coins?limit=200" | jq .total_count
 ```
 **Result:** `115` → `115` ✅ **NO DUPLICATES**
 
+
 ---
+
 
 ## 🎯 **Evaluator Verification (2 Minutes)**
 
+
 ### 1. **Test Normalization (30s)**
-```
-curl -H "X-API-Key: kasparro_secret_key_2025" \
+```bash
+# Load credentials from .env.test
+source .env.test
+
+curl -H "X-API-Key: ${API_KEY}" \
   "https://kasparro-api-545961211138.asia-south1.run.app/api/v1/coins?limit=200" \
   | jq '.coins[] | select(.symbol=="BTC")'
 ```
 **Expect:** BTC with `source_identifiers: 2` ✅
 
+
 ### 2. **Check Multi-Source Count (10s)**
-```
-curl -H "X-API-Key: kasparro_secret_key_2025" \
+```bash
+curl -H "X-API-Key: ${API_KEY}" \
   "https://kasparro-api-545961211138.asia-south1.run.app/api/v1/coins?limit=200" \
   | jq '[.coins[] | select(.source_identifiers | length >= 2)] | length'
 ```
 **Expect:** `81` ✅
 
+
 ### 3. **Verify Scheduler (10s)**
-```
+```bash
 gcloud scheduler jobs list --location=asia-south1
 ```
 **Expect:** `kasparro-etl-15min ENABLED` ✅
 
+
 ---
 
+
 ## 📈 **Key Metrics (LIVE)**
+
 
 ```
 ✅ Canonical Coins: 115 (no duplicates)
@@ -169,9 +215,12 @@ gcloud scheduler jobs list --location=asia-south1
 ✅ Scheduler: Every 15 minutes (ENABLED)
 ```
 
+
 ---
 
+
 ## ✅ **Deficiencies RESOLVED**
+
 
 | Issue | Before ❌ | After ✅ |
 |-------|-----------|----------|
@@ -181,15 +230,15 @@ gcloud scheduler jobs list --location=asia-south1
 | Idempotency | Duplicates on re-run | **115 → 115 coins** |
 | Docker | Single-stage | **Multi-stage optimized** |
 
+
 ---
+
 
 **Live Resources:**
 - [API Docs](https://kasparro-api-545961211138.asia-south1.run.app/docs)
 - [Cloud Scheduler](https://console.cloud.google.com/cloudscheduler?project=forward-logic-482607-k3)
 - [Cloud Logs](https://console.cloud.google.com/run/detail/asia-south1/kasparro-api/logs?project=forward-logic-482607-k3)
 
+
 **Repo:** https://github.com/pruthvir7/kasparro-backend-pruthvi-r  
 **Submitted:** December 29, 2025
-```
-
-***

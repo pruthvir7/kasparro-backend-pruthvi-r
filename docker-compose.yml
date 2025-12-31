@@ -4,14 +4,17 @@ services:
     ports:
       - "8000:8000"
     environment:
-      - DATABASE_URL=${DATABASE_URL}
-      - COINGECKO_API_KEY=${COINGECKO_API_KEY:-demo-api-key}
-      - API_KEY=${API_KEY:-kasparro_secret_key_2025}
-      - ENVIRONMENT=development
+      - DATABASE_URL=${DATABASE_URL:-postgresql+asyncpg://postgres:postgres@db:5432/kasparro}
+      - COINGECKO_API_KEY=${COINGECKO_API_KEY:-not_required_for_free_tier}
+      - API_KEY=${API_KEY:-kasparro_test_key_for_evaluation_2025}
+      - ENVIRONMENT=${ENVIRONMENT:-development}
     depends_on:
       db:
         condition: service_healthy
     restart: unless-stopped
+    volumes:
+      - ./app:/app/app
+      - ./data:/app/data
 
   db:
     image: postgres:15

@@ -6,11 +6,18 @@
 set -e  # Exit on any error
 
 API_URL="http://localhost:8000"
-API_KEY="kasparro_secret_key_2025"
+
+# Load API key from .env.test or use fallback
+if [ -f .env.test ]; then
+    source .env.test
+fi
+API_KEY="${API_KEY:-kasparro_test_key_for_evaluation_2025}"
 
 echo "=========================================="
 echo "🧪 KASPARRO BACKEND SMOKE TEST"
 echo "=========================================="
+echo ""
+echo "Testing with API key: ${API_KEY:0:20}..."  # Show first 20 chars only
 echo ""
 
 # Colors for output

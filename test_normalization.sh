@@ -5,8 +5,18 @@ echo "Normalization Verification Tests"
 echo "=================================="
 echo ""
 
-API_KEY="kasparro_secret_key_2025"
+# Load API key from .env.test if available
+if [ -f .env.test ]; then
+    source .env.test
+    echo "✓ Loaded credentials from .env.test"
+fi
+
+# Fallback to test key if not set
+API_KEY="${API_KEY:-kasparro_test_key_for_evaluation_2025}"
 BASE_URL="http://localhost:8000"
+
+echo "Testing with API key: ${API_KEY:0:22}..."
+echo ""
 
 # Test 1: Health
 echo "1. Health Check..."
