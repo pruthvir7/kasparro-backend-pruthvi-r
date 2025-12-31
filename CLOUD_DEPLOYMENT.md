@@ -153,27 +153,6 @@ kasparro-etl-15min  ENABLED  */15 * * * *
 **Data Flow:** `CoinGecko → CoinPaprika → CSV → Normalized Schema (81 multi-source coins)`
 
 
----
-
-
-## 🚀 One-Command Deploy (Production)
-
-
-```bash
-gcloud run deploy kasparro-api \
-  --source . \
-  --region=asia-south1 \
-  --allow-unauthenticated \
-  --add-cloudsql-instances=forward-logic-482607-k3:asia-south1:kasparro-db \
-  --memory=1Gi \
-  --timeout=300s \
-  --set-env-vars="DATABASE_URL=postgresql+asyncpg://postgres:KasparroDB@/kasparro?host=/cloudsql/forward-logic-482607-k3:asia-south1:kasparro-db,API_KEY=kasparro_test_key_for_evaluation_2025,ENVIRONMENT=production,COINGECKO_API_KEY="
-```
-
-
----
-
-
 ## 🔧 Maintenance Commands
 
 

@@ -4,7 +4,7 @@ from httpx import AsyncClient
 from app.main import app
 
 
-API_KEY = os.getenv("API_KEY", "kasparro_test_key_for_evaluation_2025")
+API_KEY = os.getenv("API_KEY", "kasparro_secret_key_2025")
 
 
 @pytest.mark.asyncio

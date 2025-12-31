@@ -5,8 +5,8 @@ services:
       - "8000:8000"
     environment:
       - DATABASE_URL=${DATABASE_URL:-postgresql+asyncpg://postgres:postgres@db:5432/kasparro}
-      - COINGECKO_API_KEY=${COINGECKO_API_KEY:-not_required_for_free_tier}
-      - API_KEY=${API_KEY:-kasparro_test_key_for_evaluation_2025}
+      - COINGECKO_API_KEY=${COINGECKO_API_KEY:-nokey}
+      - API_KEY=${API_KEY:-kasparro_secret_key_2025}
       - ENVIRONMENT=${ENVIRONMENT:-development}
     depends_on:
       db:
